@@ -5,7 +5,9 @@
 // scene's 12 shown twice), with a silent soundtrack, which Instagram's rules for video expect,
 // its index at the front and no edit lists.
 //
-//   node scripts/story-video.mjs [--url https://chuvitibahoje.com/story] [--saida story.mp4] [--segundos 10]
+//   node scripts/story-video.mjs [--url https://chuvitibahoje.com/story] [--saida story.mp4] [--segundos 10] [--relogio 2026-10-24T13:00:00Z]
+//
+// `--relogio` sets the page's clock (the day's passers-by, a weekend's, are by its date); the real time otherwise.
 //
 // Needs Playwright's Chromium (npx playwright install chromium) and ffmpeg on the PATH.
 
@@ -19,6 +21,7 @@ const { values } = parseArgs({
     url: { type: 'string', default: 'https://chuvitibahoje.com/story' },
     saida: { type: 'string', default: 'story.mp4' },
     segundos: { type: 'string', default: '10' },
+    relogio: { type: 'string' },
   },
 });
 const seconds = Number(values.segundos);
@@ -38,7 +41,8 @@ try {
     timezoneId: 'America/Sao_Paulo',
   });
   // The clock reads the real time, and only moves when we move it.
-  const start = Date.now();
+  const start = values.relogio ? Date.parse(values.relogio) : Date.now();
+  if (!Number.isFinite(start)) throw new Error(`--relogio: not a date: ${values.relogio}`);
   await page.clock.install({ time: start });
   await page.clock.pauseAt(start);
   await page.addInitScript(() => {
