@@ -1,0 +1,53 @@
+# The day's Instagram Story: chuvitibahoje.com/story recorded as a video
+# (scripts/story-video.mjs), kept as the run's artifact for a week, and, when the site asked
+# for it (the `pedido` it started the run with), handed back to the site, which posts it
+# (scripts/story-post.mjs). Started by the site each morning and from its dashboard; by hand
+# from the Actions tab, without a `pedido`, it only records.
+name: Story do dia
+
+on:
+  workflow_dispatch:
+    inputs:
+      pedido:
+        description: Pedido do site (vazio para só gravar)
+        required: false
+        default: ''
+      url:
+        description: Página a gravar
+        required: true
+        default: https://chuvitibahoje.com/story
+
+permissions:
+  contents: read
+  # The run's identity token, which tells the site it is this workflow calling.
+  id-token: write
+
+concurrency:
+  group: story
+
+jobs:
+  video:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PEDIDO: ${{ inputs.pedido }}
+      URL: ${{ inputs.url }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps --only-shell chromium
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: node scripts/story-video.mjs --url "$URL" --saida story.mp4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: story
+          path: story.mp4
+          retention-days: 7
+      - if: env.PEDIDO != ''
+        run: node scripts/story-post.mjs --pedido "$PEDIDO" --video story.mp4
+      - if: failure() && env.PEDIDO != ''
+        run: node scripts/story-post.mjs --pedido "$PEDIDO" --falhou

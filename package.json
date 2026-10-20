@@ -1,0 +1,13 @@
+{
+  "name": "chuvitiba-story",
+  "private": true,
+  "type": "module",
+  "description": "Records chuvitibahoje.com's daily Instagram Story as a video and hands it to the site, which posts it.",
+  "scripts": {
+    "video": "node scripts/story-video.mjs",
+    "post": "node scripts/story-post.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.1"
+  }
+}
