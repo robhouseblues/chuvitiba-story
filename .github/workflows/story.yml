@@ -1,8 +1,11 @@
 # The day's Instagram Story: chuvitibahoje.com/story recorded as a video
 # (scripts/story-video.mjs), kept as the run's artifact for a week, and, when the site asked
 # for it (the `pedido` it started the run with), handed back to the site, which posts it
-# (scripts/story-post.mjs). Started by the site each morning and from its dashboard; by hand
-# from the Actions tab, without a `pedido`, it only records.
+# (scripts/story-post.mjs). From the same moment's page, the day's card for X and its caption
+# (chuvitibahoje.com/card, scripts/story-card.mjs), kept as an artifact too and not posted
+# anywhere yet; if they can't be made, the Story goes on without them. Started by the site each
+# morning and from its dashboard; by hand from the Actions tab, without a `pedido`, it only
+# records.
 name: Story do dia
 
 on:
@@ -16,6 +19,10 @@ on:
         description: Página a gravar
         required: true
         default: https://chuvitibahoje.com/story
+      card:
+        description: Card do X a fazer
+        required: true
+        default: https://chuvitibahoje.com/card
 
 permissions:
   contents: read
@@ -32,6 +39,7 @@ jobs:
     env:
       PEDIDO: ${{ inputs.pedido }}
       URL: ${{ inputs.url }}
+      CARD: ${{ inputs.card }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -46,6 +54,18 @@ jobs:
         with:
           name: story
           path: story.mp4
+          retention-days: 7
+      # The card checks itself and refuses rather than show a wrong answer; that never holds up the Story.
+      - id: card
+        continue-on-error: true
+        run: node scripts/story-card.mjs --url "$CARD" --saida card.png --legenda card.txt
+      - if: steps.card.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: card
+          path: |
+            card.png
+            card.txt
           retention-days: 7
       - if: env.PEDIDO != ''
         run: node scripts/story-post.mjs --pedido "$PEDIDO" --video story.mp4
