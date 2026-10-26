@@ -47,8 +47,24 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts
+      # Ubuntu's mirror can slow to a crawl (once, installing took the run's 30 minutes and nothing
+      # was recorded), so apt keeps its downloads in ~/apt, carried over from the last run, and
+      # fetches only what Ubuntu updated since. An install that still drags on fails in time to
+      # tell the site.
+      - uses: actions/cache@v6
+        with:
+          path: ~/apt
+          key: apt-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: apt-${{ runner.os }}-
+      - run: |
+          mkdir -p ~/apt/partial
+          echo "Dir::Cache::Archives \"$HOME/apt\";" | sudo tee /etc/apt/apt.conf.d/90chuvitiba
       - run: npx playwright install --with-deps --only-shell chromium
+        timeout-minutes: 10
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+        timeout-minutes: 10
+      # apt wrote them as root; the cache is saved as the runner.
+      - run: sudo chown -R "$(id -u):$(id -g)" ~/apt
       - run: node scripts/story-video.mjs --url "$URL" --saida story.mp4
       - uses: actions/upload-artifact@v4
         with:
@@ -69,5 +85,6 @@ jobs:
           retention-days: 7
       - if: env.PEDIDO != ''
         run: node scripts/story-post.mjs --pedido "$PEDIDO" --video story.mp4
-      - if: failure() && env.PEDIDO != ''
+      # Out of time is cancelled, not failed, and the site still has to hear it.
+      - if: (failure() || cancelled()) && env.PEDIDO != ''
         run: node scripts/story-post.mjs --pedido "$PEDIDO" --falhou
