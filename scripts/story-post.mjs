@@ -2,10 +2,11 @@
 // the Worker the video recorded for its request, then asks how it is going every 15 seconds
 // until the Story is up on Instagram, has failed, or (a test) is only kept. Each call carries
 // the run's identity token from GitHub (OpenID Connect), which is how the Worker knows it is
-// this workflow calling (the site's src/oidc.ts). With --falhou, it tells the Worker the recording failed.
+// this workflow calling (the site's src/oidc.ts). With --falhou, it tells the Worker the recording failed,
+// and with --etapa where: preparar (installing), gravar, enviar (the video), or tempo (cancelled).
 //
 //   node scripts/story-post.mjs --pedido <id> [--video story.mp4] [--site https://chuvitibahoje.com]
-//   node scripts/story-post.mjs --pedido <id> --falhou
+//   node scripts/story-post.mjs --pedido <id> --falhou [--etapa preparar|gravar|enviar|tempo]
 //
 // Runs on GitHub Actions only: the job needs `permissions: id-token: write`.
 
@@ -19,6 +20,7 @@ const { values } = parseArgs({
     video: { type: 'string', default: 'story.mp4' },
     site: { type: 'string', default: 'https://chuvitibahoje.com' },
     falhou: { type: 'boolean', default: false },
+    etapa: { type: 'string' },
   },
 });
 if (!/^[0-9a-f]{32}$/.test(values.pedido ?? '')) throw new Error('--pedido: the request id the Worker started the run with');
@@ -37,8 +39,8 @@ async function identity() {
   return (await response.json()).value;
 }
 
-async function call(path, init = {}) {
-  const response = await fetch(`${values.site}${path}?pedido=${values.pedido}`, {
+async function call(path, init = {}, query = {}) {
+  const response = await fetch(`${values.site}${path}?${new URLSearchParams({ pedido: values.pedido, ...query })}`, {
     method: 'POST',
     ...init,
     headers: { authorization: `Bearer ${await identity()}`, ...init.headers },
@@ -51,7 +53,7 @@ async function call(path, init = {}) {
 const say = (state) => console.log(`${new Date().toISOString()} ${state.estado}${state.erro ? `: ${state.erro}` : ''}`);
 
 if (values.falhou) {
-  say(await call('/story/falhou'));
+  say(await call('/story/falhou', {}, values.etapa ? { etapa: values.etapa } : {}));
 } else {
   const video = await readFile(values.video);
   let state = await call('/story/video', { body: video, headers: { 'content-type': 'video/mp4' } });

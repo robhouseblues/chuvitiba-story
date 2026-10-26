@@ -61,11 +61,14 @@ jobs:
           echo "Dir::Cache::Archives \"$HOME/apt\";" | sudo tee /etc/apt/apt.conf.d/90chuvitiba
       - run: npx playwright install --with-deps --only-shell chromium
         timeout-minutes: 10
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - id: ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
         timeout-minutes: 10
       # apt wrote them as root; the cache is saved as the runner.
       - run: sudo chown -R "$(id -u):$(id -g)" ~/apt
-      - run: node scripts/story-video.mjs --url "$URL" --saida story.mp4
+      - id: video
+        run: node scripts/story-video.mjs --url "$URL" --saida story.mp4
+        timeout-minutes: 10
       - uses: actions/upload-artifact@v4
         with:
           name: story
@@ -85,6 +88,9 @@ jobs:
           retention-days: 7
       - if: env.PEDIDO != ''
         run: node scripts/story-post.mjs --pedido "$PEDIDO" --video story.mp4
-      # Out of time is cancelled, not failed, and the site still has to hear it.
+      # Out of time is cancelled, not failed, and the site still has to hear it. It hears where the
+      # run stopped too: getting ready (installing), recording, or sending the video.
       - if: (failure() || cancelled()) && env.PEDIDO != ''
-        run: node scripts/story-post.mjs --pedido "$PEDIDO" --falhou
+        run: node scripts/story-post.mjs --pedido "$PEDIDO" --falhou --etapa "$ETAPA"
+        env:
+          ETAPA: ${{ job.status == 'cancelled' && 'tempo' || steps.video.outcome == 'success' && 'enviar' || steps.ffmpeg.outcome == 'success' && 'gravar' || 'preparar' }}
