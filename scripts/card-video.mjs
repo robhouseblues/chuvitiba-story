@@ -8,7 +8,7 @@
 // caption is there and fits a post. If any of that fails, it fails: never a card that looks right
 // and says wrong. An empty caption is fine: the post is then the video alone.
 //
-//   node scripts/card-video.mjs [--url https://chuvitibahoje.com/card/video] [--saida card.mp4] [--legenda card.txt] [--segundos 10] [--relogio 2026-10-20T09:20:00Z]
+//   node scripts/card-video.mjs [--url https://staff.chuvitibahoje.com/card/video] [--saida card.mp4] [--legenda card.txt] [--segundos 10] [--relogio 2026-10-20T09:20:00Z]
 //
 // Needs Playwright's Chromium and ffmpeg on the PATH.
 
@@ -18,9 +18,19 @@ import { rm, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import { chromium } from 'playwright';
 
+/** On GitHub Actions, the run's identity, which lets it open the page on the dashboard's host (the site's src/oidc.ts); elsewhere, nothing. */
+async function identityHeaders(page) {
+  const { ACTIONS_ID_TOKEN_REQUEST_URL: url, ACTIONS_ID_TOKEN_REQUEST_TOKEN: token } = process.env;
+  if (!url || !token || new URL(page).hostname !== 'staff.chuvitibahoje.com') return {};
+  const response = await fetch(`${url}&audience=${encodeURIComponent('https://chuvitibahoje.com')}`, { headers: { authorization: `bearer ${token}` } });
+  if (!response.ok) throw new Error(`GitHub gave no identity token (${response.status})`);
+  const { value } = await response.json();
+  return { authorization: `Bearer ${value}` };
+}
+
 const { values } = parseArgs({
   options: {
-    url: { type: 'string', default: 'https://chuvitibahoje.com/card/video' },
+    url: { type: 'string', default: 'https://staff.chuvitibahoje.com/card/video' },
     saida: { type: 'string', default: 'card.mp4' },
     legenda: { type: 'string' },
     segundos: { type: 'string', default: '10' },
@@ -41,7 +51,8 @@ if (!Number.isFinite(start)) throw new Error(`--relogio: not a date: ${values.re
 
 const browser = await chromium.launch();
 try {
-  const page = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: 1, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+  const page = await browser.newPage({ extraHTTPHeaders: await identityHeaders(values.url),
+    viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: 1, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
   await page.clock.install({ time: start });
   await page.clock.pauseAt(start);
   await page.addInitScript(() => {
@@ -49,6 +60,7 @@ try {
   });
   const response = await page.goto(values.url, { waitUntil: 'networkidle' });
   if (!response?.ok()) throw new Error(`no card: ${values.url} answered ${response?.status() ?? 'nothing'}: ${((await response?.text()) ?? '').trim()}`);
+  if (!(await page.evaluate(() => document.documentElement.hasAttribute('data-story')))) throw new Error(`${values.url}: not the page to record`);
   await page.evaluate(() => document.fonts.ready);
   const font = await page.evaluate(() => [...document.fonts].some((face) => face.family.includes('Pixelify') && face.status === 'loaded'));
   if (!font) throw new Error('no card: the Pixelify Sans font did not load');

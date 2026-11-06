@@ -19,11 +19,11 @@ on:
       url:
         description: Página a gravar
         required: true
-        default: https://chuvitibahoje.com/story
+        default: https://staff.chuvitibahoje.com/story
       card:
         description: Card do X a fazer
         required: true
-        default: https://chuvitibahoje.com/card/video
+        default: https://staff.chuvitibahoje.com/card/video
 
 permissions:
   contents: read

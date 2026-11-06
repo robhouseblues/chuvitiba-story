@@ -5,7 +5,7 @@
 // scene's 12 shown twice), with a silent soundtrack, which Instagram's rules for video expect,
 // its index at the front and no edit lists.
 //
-//   node scripts/story-video.mjs [--url https://chuvitibahoje.com/story] [--saida story.mp4] [--segundos 10] [--relogio 2026-10-24T13:00:00Z]
+//   node scripts/story-video.mjs [--url https://staff.chuvitibahoje.com/story] [--saida story.mp4] [--segundos 10] [--relogio 2026-10-24T13:00:00Z]
 //
 // `--relogio` sets the page's clock (the day's passers-by, a weekend's, are by its date); the real time otherwise.
 //
@@ -16,9 +16,19 @@ import { once } from 'node:events';
 import { parseArgs } from 'node:util';
 import { chromium } from 'playwright';
 
+/** On GitHub Actions, the run's identity, which lets it open the page on the dashboard's host (the site's src/oidc.ts); elsewhere, nothing. */
+async function identityHeaders(page) {
+  const { ACTIONS_ID_TOKEN_REQUEST_URL: url, ACTIONS_ID_TOKEN_REQUEST_TOKEN: token } = process.env;
+  if (!url || !token || new URL(page).hostname !== 'staff.chuvitibahoje.com') return {};
+  const response = await fetch(`${url}&audience=${encodeURIComponent('https://chuvitibahoje.com')}`, { headers: { authorization: `bearer ${token}` } });
+  if (!response.ok) throw new Error(`GitHub gave no identity token (${response.status})`);
+  const { value } = await response.json();
+  return { authorization: `Bearer ${value}` };
+}
+
 const { values } = parseArgs({
   options: {
-    url: { type: 'string', default: 'https://chuvitibahoje.com/story' },
+    url: { type: 'string', default: 'https://staff.chuvitibahoje.com/story' },
     saida: { type: 'string', default: 'story.mp4' },
     segundos: { type: 'string', default: '10' },
     relogio: { type: 'string' },
@@ -35,6 +45,7 @@ const VIDEO_FPS = 24;
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage({
+    extraHTTPHeaders: await identityHeaders(values.url),
     viewport: { width: WIDTH, height: HEIGHT },
     deviceScaleFactor: 1,
     locale: 'pt-BR',
@@ -50,6 +61,7 @@ try {
   });
   const response = await page.goto(values.url, { waitUntil: 'networkidle' });
   if (!response?.ok()) throw new Error(`${values.url}: ${response?.status() ?? 'no response'}`);
+  if (!(await page.evaluate(() => document.documentElement.hasAttribute('data-story')))) throw new Error(`${values.url}: not the page to record`);
   await page.evaluate(() => document.fonts.ready);
   // Long enough for what the page does on timers once it is up: the scene laid out again for
   // the font, 80 ms after it arrives.
