@@ -1,9 +1,10 @@
 # The day's Instagram Story: chuvitibahoje.com/story recorded as a video
 # (scripts/story-video.mjs), kept as the run's artifact for a week, and, when the site asked
 # for it (the `pedido` it started the run with), handed back to the site, which posts it
-# (scripts/story-post.mjs). From the same moment's page, the day's card for X and its caption
-# (chuvitibahoje.com/card, scripts/story-card.mjs), kept as an artifact too and not posted
-# anywhere yet; if they can't be made, the Story goes on without them. Started by the site each
+# (scripts/story-post.mjs). From the same moment's page, the day's card for X as a video and its
+# caption (chuvitibahoje.com/card/video, scripts/card-video.mjs), kept as an artifact too and handed
+# to the site (scripts/card-post.mjs), which decides whether it goes out; if they can't be made or
+# delivered, the Story goes on without them. Started by the site each
 # morning and from its dashboard; by hand from the Actions tab, without a `pedido`, it only
 # records.
 name: Story do dia
@@ -22,7 +23,7 @@ on:
       card:
         description: Card do X a fazer
         required: true
-        default: https://chuvitibahoje.com/card
+        default: https://chuvitibahoje.com/card/video
 
 permissions:
   contents: read
@@ -77,15 +78,20 @@ jobs:
       # The card checks itself and refuses rather than show a wrong answer; that never holds up the Story.
       - id: card
         continue-on-error: true
-        run: node scripts/story-card.mjs --url "$CARD" --saida card.png --legenda card.txt
+        timeout-minutes: 5
+        run: node scripts/card-video.mjs --url "$CARD" --saida card.mp4 --legenda card.txt
       - if: steps.card.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: card
           path: |
-            card.png
+            card.mp4
             card.txt
           retention-days: 7
+      - if: steps.card.outcome == 'success' && env.PEDIDO != ''
+        continue-on-error: true
+        timeout-minutes: 2
+        run: node scripts/card-post.mjs --pedido "$PEDIDO" --video card.mp4 --legenda card.txt
       - if: env.PEDIDO != ''
         run: node scripts/story-post.mjs --pedido "$PEDIDO" --video story.mp4
       # Out of time is cancelled, not failed, and the site still has to hear it. It hears where the
